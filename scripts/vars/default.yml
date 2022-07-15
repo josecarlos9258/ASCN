@@ -1,0 +1,15 @@
+---
+
+# Path to generated SSH key for GCP
+ansible_ssh_private_key_file: "~/.ssh/gcloud_instance1"
+
+# Force ansible to use python3
+ansible_python_interpreter: /usr/bin/python3
+
+# Wikijs version
+WIKIJS_VERSION: '2.5.268'
+
+# Nodejs version
+NODEJS_VERSION: '16'
+
+

@@ -1,0 +1,23 @@
+---
+
+# Name of the Master DB
+name_master: "teste-db"
+
+# PostgreSQL User password
+user_password: "password"
+
+# DBSQL_Master region
+region_master: "us-east1"
+
+# 4 CPUS, 26GB
+tier: "db-custom-4-26624"
+
+# 100GB in bytes
+disk_size: 107374182400
+
+# Second Generation instance or PostgreSQL instance
+backend_type: SECOND_GEN
+
+database_version: POSTGRES_13
+
+path_external_file: ipBase.txt
