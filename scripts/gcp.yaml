@@ -1,0 +1,12 @@
+---
+plugin: gcp_compute
+projects:
+          - g28ascn2021
+groups:
+        webserver1: "'jsjb' in name"
+        webserver2: "'jsjb' in name"
+        webserver3: "'k3d3' in name"
+        monitor: "'monitor' in name"
+        webserverstodos: "'web' in name"
+auth_kind: serviceaccount
+service_account_file: /opt/ansible/inventory/jcm_serviceaccount.json

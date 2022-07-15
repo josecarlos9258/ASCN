@@ -1,0 +1,55 @@
+---
+# Criação da 'instance template' definida pelo grupo
+- name: Create Compute Engine instances
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+  - vars/default.yml
+  - vars/authentication.yml
+  - vars/sqldbspecs.yml
+  - vars/vmspecs.yml
+
+  tasks:
+
+    - name: Create an IP address for instance
+      gcp_compute_address:
+        name: "{{ name_template }}-ip"
+        region: "{{ region_template }}"
+        project: "{{ gcp_project }}"
+        service_account_file: "{{ gcp_cred_file }}"
+        auth_kind: "{{ gcp_cred_kind }}"
+      register: gce_ip
+
+  # -web- no nome
+    - name: Bring up the instance in the zone.
+      gcp_compute_instance_template:
+        name: "{{ name_template }}"
+        properties:
+          machine_type: "{{ machine_type }}"
+          disks:
+            - auto_delete: true
+              boot: true
+              initialize_params:
+                source_image: "{{ image_1804 }}"
+            - type: PERSISTENT
+          network_interfaces:
+            - access_configs:
+                - name: External NAT
+                  nat_ip: "{{ gce_ip }}"
+                  type: ONE_TO_ONE_NAT
+          tags:
+            items:
+              - http-server
+              - https-server
+        project: "{{ gcp_project }}"
+        service_account_file: "{{ gcp_cred_file }}"
+        auth_kind: "{{ gcp_cred_kind }}"
+        
+      register: gce_template
+    
+
+
+
+
+    

@@ -1,0 +1,83 @@
+---
+
+# Usado para a criação da Base de Dados CLOUD SQL, com gestor PostgreSQL e N réplicas
+
+- name: Create GCP CloudSQL instance
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - vars/default.yml
+    - vars/authentication.yml
+    - vars/sqldbspecs.yml
+
+  tasks:
+    - name: Create GCP CloudSQL instance - MASTER
+      gcp_sql_instance:
+        name: '{{ name_master }}' 
+        backend_type: '{{ backend_type }}' 
+        database_version: '{{ database_version }}' 
+        settings:
+          availability_type: REGIONAL
+          ip_configuration:
+            authorized_networks:
+            - name: Any machine
+              value: 0.0.0.0/0
+          tier: '{{ tier }}'
+          backup_configuration: 
+            enabled: yes
+        max_disk_size: 107374182400
+        region: '{{ region_master }}'
+        project: '{{ gcp_project }}'
+        auth_kind: '{{ gcp_cred_kind }}'
+        service_account_file: '{{ gcp_cred_file }}'
+        instance_type: CLOUD_SQL_INSTANCE
+        state: present 
+      register: info_serverinstance
+  
+    - name: Setting PostgreSQL User data
+      shell: gcloud sql users set-password postgres \
+            --instance={{ name_master }} \
+            --password=password
+
+    - name: Adding SQL instance IP to an external file
+      lineinfile:
+        path: '{{ path_external_file }}'
+        regexp: '.*$'
+        line: "{{ info_serverinstance.ipAddresses[0].ipAddress }}"
+
+   # - name: Create GCP CloudSQL instance - READ REPLICA1
+    #  gcp_sql_instance:
+     #   name: '{{ name_master }}-readreplica1'
+    #    master_instance_name: '{{ name_master }}'
+   #     database_version: '{{ database_version }}' 
+     #   backend_type: '{{ backend_type }}' 
+     #   replica_configuration:
+     #     failover_target: no
+     #   settings:
+     #     availability_type: ZONAL
+     #     tier: '{{ tier }}'
+     #   auth_kind: '{{ gcp_cred_kind }}'
+    #    project: '{{ gcp_project }}'
+    #    service_account_file: '{{ gcp_cred_file }}'
+   #     instance_type: READ_REPLICA_INSTANCE
+  #      state: present
+    #  register: info_readreplicaum
+     
+   # - name: Create GCP CloudSQL instance - READ REPLICA2
+   #   gcp_sql_instance:
+   #     name: '{{ name_master }}-readreplica2'
+   #     master_instance_name: '{{ name_master }}'
+   #     database_version: '{{ database_version }}'
+   #     backend_type: '{{ backend_type }}' 
+   #     replica_configuration:
+   #       failover_target: no
+   #     settings:
+   #       availability_type: ZONAL
+   #       tier: '{{ tier }}'
+   #     auth_kind: '{{ gcp_cred_kind }}'
+   #     project: '{{ gcp_project }}'
+   #     service_account_file: '{{ gcp_cred_file }}'
+   #     instance_type: READ_REPLICA_INSTANCE
+  #      state: present
+  #    register: info_readreplicadois

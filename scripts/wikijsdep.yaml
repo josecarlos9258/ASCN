@@ -1,0 +1,128 @@
+---
+
+# Usado para dar deploy do wikijs quando as VM's já estão criadas
+# Hosts são escolhidos através dos grupos no inventário dinâmico
+
+- name: Installation and configuration of Wiki.js
+  hosts: webserverstodos
+  #Para criar conta administrador:
+  # hosts: "{{ groups['webserverstodos'][0] }}"
+  become: yes
+  become_method: sudo
+  vars_files:
+  - vars/default.yml
+  - vars/authentication.yml
+  - vars/sqldbspecs.yml
+
+  vars:
+    database_ip: "{{ lookup('file', '{{ path_external_file }}') }}"
+
+  tasks:
+    - name: Wait for SSH for instance
+      wait_for: delay=17 sleep=17 host={{ ansible_ssh_host }} port=22 state=started timeout=250
+
+    - name: Updating apt-get repo and cache
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+    - name: Instaling dependencies
+      apt:
+        name:
+            - socat
+            - bash-completion
+            - apt-transport-https
+            - build-essential
+            - unzip
+            - libpq-dev
+            - python3-pip
+            - python3-setuptools
+            - acl
+        state: present
+
+    - name: Downloading Node.js Setup
+      shell: curl -fsSL https://deb.nodesource.com/setup_{{ NODEJS_VERSION }}.x | sudo -E bash -
+      
+    - name: Installing Node.js
+      apt:
+        name: nodejs
+        state: present
+
+    - name: Updating NPM
+      shell: npm install -g npm@latest
+
+    - name: Downloading Wiki.js Setup
+      get_url:
+        url: https://github.com/Requarks/wiki/releases/download/{{ WIKIJS_VERSION }}/wiki-js.tar.gz
+        dest: /tmp/
+
+    - name: mkdir wiki's directory
+      file:
+        path: /var/wiki
+        state: directory
+
+    - name: Extracting the package
+      unarchive:
+        src: /tmp/wiki-js.tar.gz
+        dest: /var/wiki/
+        remote_src: yes
+        mode: 755
+
+    - name: Rename the sample config file
+      shell: mv /var/wiki/config.sample.yml /var/wiki/config.yml
+
+    - name: Editing config file - host
+      lineinfile:
+        path: /var/wiki/config.yml
+        regexp: 'host(.*)$'
+        line: "  host: {{ database_ip }}"
+
+    - name: Editing config file - porta
+      lineinfile:
+        path: /var/wiki/config.yml
+        regexp: 'port: 5432$'
+        line: "  port: 5432"
+     
+    - name: Editing config file - db_name
+      lineinfile:
+        path: /var/wiki/config.yml
+        regexp: 'db: wiki$'
+        line: "  db: postgres"
+
+    - name: Editing config file - user
+      lineinfile:
+        path: /var/wiki/config.yml
+        regexp: 'user: wikijs$'
+        line: "  user: postgres"
+
+    - name: Editing config file - password
+      lineinfile:
+        path: /var/wiki/config.yml
+        regexp: 'pass: wikijsrocks$'
+        line: "  pass: {{ user_password }}"
+ 
+    - name: Moving wikiservice file
+      copy:
+        src: /home/jclm/wikijs/g28ascn2021/wiki.service
+        dest: /etc/systemd/system/wiki.service
+        force: yes
+
+    - name: Systemd daemon reload
+      systemd:
+        daemon_reload: yes
+
+    - name: Running Wiki.js
+      systemd:
+        state: started
+        name: wiki
+  
+    - name: Enable Wiki.js service
+      systemd:
+        name: wiki
+        enabled: yes
+        masked: no
+
+   
+    
+
+
+
+            

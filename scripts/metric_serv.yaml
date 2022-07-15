@@ -1,0 +1,49 @@
+---
+
+  # Responsável pela instalação da ferramenta MetricBeat
+- name: Downloading and Installing MetricBeat
+  hosts: webserver3
+  become: yes
+  become_method: sudo
+  vars_files:
+    - vars/default.yml
+  vars:
+    ipmonitor: "{{ groups['monitor'][0] }}"
+
+  tasks:
+    - name: Wait for SSH for instance
+      wait_for: delay=17 sleep=17 host={{ ansible_ssh_host }} port=22 state=started timeout=250
+    
+    - name: Downloading metricbeat
+      get_url:
+        url: https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-7.15.2-amd64.deb
+        dest: /tmp/
+
+    - name: Instalar o metricbeat  
+      command: dpkg -i /tmp/metricbeat-7.15.2-amd64.deb
+
+    - name: Editing metricbeat.yml file - Kibana host
+      replace:
+        path: /etc/metricbeat/metricbeat.yml
+        regexp: '#host: "localhost:5601"'
+        replace: 'host: "{{ ipmonitor }}:5601"'
+
+
+    - name: Editing metricbeat.yml file - Elasticsearch output host
+      replace:
+        path: /etc/metricbeat/metricbeat.yml
+        regexp: 'hosts: \["localhost:9200"\]'
+        replace: 'hosts: ["{{ ipmonitor }}:9200"]'
+
+    - name: Editing metricbeat.yml file - Add metrics
+      replace:
+        path: /etc/metricbeat/metricbeat.yml
+        regexp: '#reload.period: 10s'
+        replace: "reload.period: 10s\nmetricbeat.modules:\n- module: system\n  metricsets:\n    - cpu\n    - load\n    - memory\n    - network\n  enabled: true\n  period: 10s\n  processes: ['.*']\n  cpu.metrics:  [\"percentages\",\"normalized_percentages\"]\n  core.metrics: [\"percentages\"]"
+
+
+    - name: metricbeat setup
+      shell: metricbeat setup -e
+
+    - name: enable metricbeat service
+      shell: service metricbeat start

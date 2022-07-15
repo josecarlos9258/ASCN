@@ -1,0 +1,95 @@
+---
+
+# ETAPA3: Monitor, responsável pelo Elasticsearch + Kibana
+# VM instance "independente"
+
+- name: Create GCP instance for ElasticSearch and Kibana
+  hosts: localhost
+  gather_facts: no
+
+  vars_files:
+    - vars/default.yml
+    - vars/authentication.yml
+    - vars/vmspecs.yml
+  
+  tasks: 
+    - name: Create an IP address for monitor
+      gcp_compute_address:
+        name: "{{ name_monitor }}-ip"
+        region: "{{ region_monitor }}"
+        project: "{{ gcp_project }}"
+        service_account_file: "{{ gcp_cred_file }}"
+        auth_kind: "{{ gcp_cred_kind }}"
+      register: gce_mon_ip
+
+    - name: Bring up the instance in the zone.
+      gcp_compute_instance:
+        name: "{{ name_monitor }}"
+        machine_type: "{{ machine_type }}"
+        disks:
+          - auto_delete: true
+            boot: true
+            initialize_params:
+              source_image: "{{ image_2004 }}"
+        network_interfaces:
+          - access_configs:
+              - name: External NAT
+                nat_ip: "{{ gce_mon_ip }}"
+                type: ONE_TO_ONE_NAT
+        tags:
+          items:
+            - http-server
+            - https-server
+        zone: "{{ zone_monitor }}"
+        project: "{{ gcp_project }}"
+        service_account_file: "{{ gcp_cred_file }}"
+        auth_kind: "{{ gcp_cred_kind }}"
+      register: gce
+    
+    - name: Wait for SSH for instance
+      wait_for: delay=15 sleep=15 host={{ gce_mon_ip.address }} port=22 state=started timeout=250
+    - name: Save host data for first zone
+      add_host: hostname={{ gce_mon_ip.address }} groupname=gce_instances_ips
+      
+- name: Instalation of ElasticSearch and Kibana
+  hosts: gce_instances_ips
+  become: yes
+  become_method: sudo
+
+  vars_files:
+    - vars/default.yml
+    - vars/vmspecs.yml
+
+  vars: 
+    elasticsearch_network_host: "0.0.0.0"
+    elasticsearch_http_port: 9200
+    elasticsearch_extra_options: |
+      discovery.type: single-node
+
+  pre_tasks:
+    
+    - name: Updating apt-get repo and cache
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+    - name: Updating upgrade
+      apt: upgrade=yes
+
+    - name: Add universe repository for bionic
+      apt_repository: 
+        repo: deb http://archive.ubuntu.com/ubuntu bionic universe
+        state: present
+      when: ansible_distribution_release == 'bionic'
+
+    
+  roles:
+    - role: 'buluma.java' 
+    - role: 'geerlingguy.elasticsearch' 
+    - role: 'geerlingguy.kibana'
+
+
+   
+    
+
+
+
+    

@@ -1,0 +1,173 @@
+---
+
+# Usado para a arquitetura simples: Cria a VM instance e dá deploy do Wikijs
+
+- name: Create Compute Engine instances
+  hosts: localhost
+  gather_facts: no
+  
+  vars_files:
+    - vars/default.yml
+    - vars/authentication.yml
+    - vars/vmspecs.yml
+
+  vars:
+    name_vm_simples: "arqsimples"
+
+  tasks:
+    - name: Create an IP address for instance
+      gcp_compute_address:
+        name: "{{ name_vm_simples }}-ip"
+        region: "{{ region_vm }}"
+        project: "{{ gcp_project }}"
+        service_account_file: "{{ gcp_cred_file }}"
+        auth_kind: "{{ gcp_cred_kind }}"
+      register: gce_ip
+
+    - name: Bring up the instance in the zone.
+      gcp_compute_instance:
+        name: "{{ name_vm_simples }}"
+        machine_type: "{{ machine_type }}"
+        disks:
+          - auto_delete: true
+            boot: true
+            initialize_params:
+              source_image: "{{ image_1804 }}"
+        network_interfaces:
+          - access_configs:
+              - name: External NAT
+                nat_ip: "{{ gce_ip }}"
+                type: ONE_TO_ONE_NAT
+        tags:
+          items:
+            - http-server
+            - https-server
+        zone: "{{ zone_vm }}"
+        project: "{{ gcp_project }}"
+        service_account_file: "{{ gcp_cred_file }}"
+        auth_kind: "{{ gcp_cred_kind }}"
+      register: gce
+    
+    - name: Wait for SSH for instance
+      wait_for: delay=21 sleep=21 host={{ gce_ip.address }} port=22 state=started timeout=250
+    - name: Save host data for first zone
+      add_host: hostname={{ gce_ip.address }} groupname=gce_instances_ips
+
+
+- name: Installation and configuration of Wiki.js
+  hosts: gce_instances_ips
+  become: yes
+  become_method: sudo
+
+  vars_files:
+  - vars/default.yml
+  - vars/sqldbspecs.yml
+
+  tasks:
+    - name: Updating apt-get repo and cache
+      apt: update_cache=yes force_apt_get=yes cache_valid_time=3600
+
+    - name: Updating upgrade
+      apt: upgrade=yes
+
+    - name: Instaling dependencies
+      apt:
+        name:
+            - socat
+            - bash-completion
+            - apt-transport-https
+            - build-essential
+            - unzip
+            - libpq-dev
+            - python3-pip
+            - python3-setuptools
+            - acl
+        state: present
+
+    - name: Downloading Node.js Setup
+      shell: curl -fsSL https://deb.nodesource.com/setup_{{ NODEJS_VERSION }}.x | sudo -E bash -
+      
+    - name: Installing Node.js
+      apt:
+        name: nodejs
+        state: present
+
+    - name: Updating NPM
+      shell: npm install -g npm@latest
+
+    - name: Downloading Wiki.js Setup
+      get_url:
+        url: https://github.com/Requarks/wiki/releases/download/{{ WIKIJS_VERSION }}/wiki-js.tar.gz
+        dest: /tmp/
+
+    - name: mkdir wiki's directory
+      file:
+        path: /var/wiki
+        state: directory
+
+    - name: Extracting the package
+      unarchive:
+        src: /tmp/wiki-js.tar.gz
+        dest: /var/wiki/
+        remote_src: yes
+        mode: 755
+
+    - name: Rename the sample config file
+      shell: mv /var/wiki/config.sample.yml /var/wiki/config.yml
+
+    - name: Instlation of PostgreSQL
+      apt:
+        name:
+          - postgresql
+          - postgresql-contrib
+          - python3-psycopg2
+        state: latest
+
+    - name: Running PostgreSQL as a service
+      service: name=postgresql state=restarted enabled=yes
+
+    - name: Creating PostgreSQL Database
+      become: true
+      become_user: postgres
+      postgresql_db: name='wiki'
+                     state=present
+
+    - name: Creating PostgreSQL User
+      become: true
+      become_user: postgres
+      postgresql_user: db='wiki'
+                       name=wikijs
+                       state=present
+                       password=wikijsrocks
+                       priv=ALL
+                       state=present
+
+    - name: Moving wikiservice file
+      copy:
+        src: /home/jclm/wikijs/g28ascn2021/wiki.service
+        dest: /etc/systemd/system/wiki.service
+        force: yes
+
+    - name: Systemd daemon reload
+      systemd:
+        daemon_reload: yes
+
+    - name: Running Wiki.js
+      systemd:
+        state: started
+        name: wiki
+  
+    - name: Enable Wiki.js service
+      systemd:
+        name: wiki
+        enabled: yes
+        masked: no
+
+
+
+
+
+
+
+
+    
