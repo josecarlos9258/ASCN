@@ -9,6 +9,7 @@ This task was developed in the curricular unit of **Cloud Computing Applications
 
 1. [Assignment](assignment.pdf)
 2. [Report](report.pdf)
+3. [Scripts](scripts/)
 
 
 
